@@ -1,8 +1,13 @@
-this is the readme for out group project.
+this is the repo for our group project.
 
 MEMBERS:
+
 BRAD HARPER
+
 JOSIAS
+
 KENNY
+
 RICO
+
 ROBERT
