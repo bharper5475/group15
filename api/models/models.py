@@ -23,3 +23,17 @@ class OrderStatus(enum.Enum):
     OUT_FOR_DELIVERY = "Out for delivery"
     COMPLETED = "Completed"
     CANCELLED = "Cancelled"
+
+# CUSTOMER MODEL
+
+class Customer(Base):
+    __tablename__ = "customers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False)
+    phone = Column(String(20), nullable=False)
+    address = Column(String(255), nullable=False)
+
+    orders = relationship("Order", back_populates="customer", cascade="all, delete-orphan")
+
+
