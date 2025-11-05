@@ -36,4 +36,19 @@ class Customer(Base):
 
     orders = relationship("Order", back_populates="customer", cascade="all, delete-orphan")
 
+# MENU ITEM MODEL 
+
+class MenuItem(Base):
+    __tablename__ = "menu_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False)
+    description = Column(Text, nullable=True)
+    price = Column(Float, nullable=False)
+    calories = Column(Integer, nullable=True)
+    category = Column(String(50), nullable=True)  # e.g. "spicy", "vegetarian"
+    is_available = Column(Boolean, default=True)
+
+    order_details = relationship("OrderDetail", back_populates="menu_item", cascade="all, delete-orphan")
+    reviews = relationship("Review", back_populates="menu_item", cascade="all, delete-orphan")
 
