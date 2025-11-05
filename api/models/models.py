@@ -46,9 +46,21 @@ class MenuItem(Base):
     description = Column(Text, nullable=True)
     price = Column(Float, nullable=False)
     calories = Column(Integer, nullable=True)
-    category = Column(String(50), nullable=True)  # e.g. "spicy", "vegetarian"
+    category = Column(String(50), nullable=True) 
     is_available = Column(Boolean, default=True)
 
     order_details = relationship("OrderDetail", back_populates="menu_item", cascade="all, delete-orphan")
     reviews = relationship("Review", back_populates="menu_item", cascade="all, delete-orphan")
 
+# PROMOTION MODEL
+
+class Promotion(Base):
+    __tablename__ = "promotions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    code = Column(String(50), unique=True, nullable=False)
+    discount_percent = Column(Float, nullable=False)
+    expiration_date = Column(Date, nullable=False)
+    is_active = Column(Boolean, default=True)
+
+    orders = relationship("Order", back_populates="promotion")

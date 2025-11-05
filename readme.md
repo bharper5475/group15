@@ -2,12 +2,12 @@ this is the repo for our group project.
 
 MEMBERS:
 
-BRAD HARPER
+BRAD 
 
 JOSIAS
 
 KENNY
 
-RICO
+MADDY
 
 ROBERT
