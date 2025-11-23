@@ -12,13 +12,13 @@ class OrderStatus(str, Enum):
     CANCELLED = "Cancelled"
 
 
-# What the client sends for each item
+# What the client sends for each item when creating an order
 class OrderItemCreate(BaseModel):
     menu_item_id: int
     quantity: int = Field(gt=0, description="Quantity must be a positive integer")
 
 
-# What the API returns for each item
+# What we return for each order detail item
 class OrderDetailInline(BaseModel):
     id: int
     menu_item_id: int
@@ -45,13 +45,31 @@ class OrderCreate(BaseModel):
 
     @field_validator("order_items")
     @classmethod
-    def validate_items_not_empty(cls, v: List[OrderItemCreate]) -> List[OrderItemCreate]:
+    def validate_items_not_empty(
+        cls, v: List[OrderItemCreate]
+    ) -> List[OrderItemCreate]:
         if not v:
             raise ValueError("order_items must contain at least one item")
         return v
 
 
-# Response model for GET/POST /orders
+# Request body for PUT /orders/{id}
+class OrderUpdate(BaseModel):
+    order_type: Optional[str] = None
+    status: Optional[OrderStatus] = None
+
+    @field_validator("order_type")
+    @classmethod
+    def validate_order_type(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        allowed = {"takeout", "delivery"}
+        if v.lower() not in allowed:
+            raise ValueError(f"order_type must be one of {allowed}")
+        return v.lower()
+
+
+# Response model for GET/POST/PUT /orders
 class OrderRead(BaseModel):
     id: int
     tracking_number: str

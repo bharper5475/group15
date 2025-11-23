@@ -21,14 +21,14 @@ def create(db: Session, request: schema.OrderCreate):
     """
     Create an order with one or more items.
 
-    Sprint goals covered:
-    - Create Order + OrderItem records
-    - Auto-generate tracking number
-    - Support takeout vs delivery (validated in schema)
-    - Basic validation of customer + menu items
+    - Validates customer exists
+    - Validates all menu items exist and are available
+    - Automatically computes total_price
+    - Auto-generates tracking_number
+    - Supports order_type: 'takeout' or 'delivery'
     """
     try:
-        # 1) Ensure customer exists
+        # Ensure customer exists (guest or otherwise)
         customer = (
             db.query(customer_model.Customer)
             .filter(customer_model.Customer.id == request.customer_id)
@@ -40,7 +40,7 @@ def create(db: Session, request: schema.OrderCreate):
                 detail="Customer does not exist",
             )
 
-        # 2) Compute total price and validate menu items
+        # Compute total price and validate menu items
         total_price = 0.0
         for item in request.order_items:
             menu_item = (
@@ -58,22 +58,21 @@ def create(db: Session, request: schema.OrderCreate):
                 )
             total_price += menu_item.price * item.quantity
 
-        # 3) Generate tracking number
         tracking_number = _generate_tracking_number()
 
-        # 4) Create Order row
+        # Create Order row
         order = order_model.Order(
             tracking_number=tracking_number,
             customer_id=request.customer_id,
-            order_type=request.order_type.lower(),  # "takeout" / "delivery"
+            order_type=request.order_type.lower(),
             total_price=total_price,
             status=order_model.OrderStatus.PENDING,
-            # promotion_id / payment_id can stay NULL for this sprint
+            # promotion_id / payment_id can remain NULL for now
         )
         db.add(order)
-        db.flush()  # assigns order.id
+        db.flush()  # assign order.id
 
-        # 5) Create OrderDetail ("OrderItem") rows
+        # Create OrderDetail rows
         for item in request.order_items:
             menu_item = (
                 db.query(menu_model.MenuItem)
@@ -88,7 +87,6 @@ def create(db: Session, request: schema.OrderCreate):
             )
             db.add(od)
 
-        # 6) Commit and return
         db.commit()
         db.refresh(order)
         return order
@@ -103,7 +101,7 @@ def create(db: Session, request: schema.OrderCreate):
 
 
 def read_all(db: Session):
-    """Optional: list all orders (useful for debugging/demo)."""
+    """List all orders."""
     try:
         return db.query(order_model.Order).all()
     except SQLAlchemyError as e:
@@ -115,7 +113,7 @@ def read_all(db: Session):
 
 
 def read_one(db: Session, item_id: int):
-    """Optional: get a single order by ID."""
+    """Get a single order by ID."""
     try:
         item = (
             db.query(order_model.Order)
@@ -129,6 +127,78 @@ def read_one(db: Session, item_id: int):
             )
         return item
     except SQLAlchemyError as e:
+        error = str(e.__dict__.get("orig", e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Database error: {error}",
+        )
+
+
+def update(db: Session, item_id: int, request: schema.OrderUpdate):
+    """
+    Update an existing order.
+
+    We allow updating:
+    - order_type ('takeout' / 'delivery')
+    - status (enum)
+    """
+    try:
+        order = (
+            db.query(order_model.Order)
+            .filter(order_model.Order.id == item_id)
+            .first()
+        )
+        if not order:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Order not found",
+            )
+
+        data = request.dict(exclude_unset=True)
+        if "order_type" in data and data["order_type"] is not None:
+            order.order_type = data["order_type"].lower()
+        if "status" in data and data["status"] is not None:
+            order.status = data["status"]
+
+        db.commit()
+        db.refresh(order)
+        return order
+
+    except SQLAlchemyError as e:
+        db.rollback()
+        error = str(e.__dict__.get("orig", e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Database error: {error}",
+        )
+
+
+def delete(db: Session, item_id: int):
+    """
+    Delete an order.
+
+    OrderDetails will be deleted as well because of the relationship
+    cascade defined on Order.order_details.
+    """
+    try:
+        order = (
+            db.query(order_model.Order)
+            .filter(order_model.Order.id == item_id)
+            .first()
+        )
+        if not order:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Order not found",
+            )
+
+        db.delete(order)
+        db.commit()
+        # Router returns 204, so we don't need to return a body
+        return
+
+    except SQLAlchemyError as e:
+        db.rollback()
         error = str(e.__dict__.get("orig", e))
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
