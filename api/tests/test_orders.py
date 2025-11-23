@@ -1,31 +1,40 @@
-from fastapi.testclient import TestClient
-from ..controllers import orders as controller
-from ..main import app
 import pytest
-from ..models import orders as model
+from pydantic import ValidationError
 
-# Create a test client for the app
-client = TestClient(app)
-
-
-@pytest.fixture
-def db_session(mocker):
-    return mocker.Mock()
+from ..schemas import orders as schema
 
 
-def test_create_order(db_session):
-    # Create a sample order
-    order_data = {
-        "customer_name": "John Doe",
-        "description": "Test order"
-    }
+def test_order_create_valid():
+    """Basic happy-path validation for OrderCreate."""
+    payload = schema.OrderCreate(
+        customer_id=1,
+        order_type="takeout",
+        order_items=[
+            schema.OrderItemCreate(menu_item_id=1, quantity=2),
+            schema.OrderItemCreate(menu_item_id=2, quantity=1),
+        ],
+    )
+    assert payload.order_type == "takeout"
+    assert len(payload.order_items) == 2
+    assert payload.order_items[0].quantity == 2
 
-    order_object = model.Order(**order_data)
 
-    # Call the create function
-    created_order = controller.create(db_session, order_object)
+def test_order_create_invalid_order_type():
+    """order_type other than takeout/delivery should fail validation."""
+    with pytest.raises(ValidationError):
+        schema.OrderCreate(
+            customer_id=1,
+            order_type="pickup",  # invalid
+            order_items=[schema.OrderItemCreate(menu_item_id=1, quantity=1)],
+        )
 
-    # Assertions
-    assert created_order is not None
-    assert created_order.customer_name == "John Doe"
-    assert created_order.description == "Test order"
+
+def test_order_create_requires_items():
+    """order_items must not be empty."""
+    with pytest.raises(ValidationError):
+        schema.OrderCreate(
+            customer_id=1,
+            order_type="delivery",
+            order_items=[],  # invalid
+        )
+
