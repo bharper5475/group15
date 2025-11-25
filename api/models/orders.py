@@ -5,6 +5,7 @@ import enum
 from api.dependencies.database import Base
 
 class OrderStatus(enum.Enum):
+    RECEIVED = "Received"
     PENDING = "Pending"
     PREPARING = "Preparing"
     OUT_FOR_DELIVERY = "Out for Delivery"
@@ -21,7 +22,7 @@ class Order(Base):
     payment_id = Column(Integer, ForeignKey("payments.id"), nullable=True)
     order_type = Column(String(20), nullable=False)
     total_price = Column(Float, nullable=False)
-    status = Column(Enum(OrderStatus), default=OrderStatus.PENDING, nullable=False)
+    status = Column(Enum(OrderStatus), default=OrderStatus.RECEIVED, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     customer = relationship("Customer", back_populates="orders")

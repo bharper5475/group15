@@ -66,7 +66,7 @@ def create(db: Session, request: schema.OrderCreate):
             customer_id=request.customer_id,
             order_type=request.order_type.lower(),
             total_price=total_price,
-            status=order_model.OrderStatus.PENDING,
+            status=order_model.OrderStatus.RECEIVED,
             # promotion_id / payment_id can remain NULL for now
         )
         db.add(order)
@@ -133,6 +133,27 @@ def read_one(db: Session, item_id: int):
             detail=f"Database error: {error}",
         )
 
+def read_by_tracking_number(db: Session, tracking_number: str):
+    """Get a single order by tracking number."""
+    try:
+        order = (
+            db.query(order_model.Order)
+            .filter(order_model.Order.tracking_number == tracking_number)
+            .first()
+        )
+        if not order:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Order not found",
+            )
+        return order
+
+    except SQLAlchemyError as e:
+        error = str(e.__dict__.get("orig", e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Database error: {error}",
+        )
 
 def update(db: Session, item_id: int, request: schema.OrderUpdate):
     """

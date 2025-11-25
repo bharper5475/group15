@@ -17,6 +17,10 @@ def create_order(request: schema.OrderCreate, db: Session = Depends(get_db)):
 def read_all_orders(db: Session = Depends(get_db)):
     return controller.read_all(db)
 
+@router.get("/tracking/{tracking_number}", response_model=schema.OrderRead)
+def read_order_by_tracking(tracking_number: str, db: Session = Depends(get_db)):
+    return controller.read_by_tracking_number(db, tracking_number=tracking_number)
+
 @router.get("/{item_id}", response_model=schema.OrderRead)
 def read_one_order(item_id: int, db: Session = Depends(get_db)):
     return controller.read_one(db, item_id=item_id)
