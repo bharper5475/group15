@@ -8,6 +8,8 @@ from ..models import (
     order_details as od_model,
     menu_items as menu_model,
     customers as customer_model,
+    recipes as recipe_model,
+    resources as resource_model,
 )
 from ..schemas import orders as schema
 
@@ -26,9 +28,10 @@ def create(db: Session, request: schema.OrderCreate):
     - Automatically computes total_price
     - Auto-generates tracking_number
     - Supports order_type: 'takeout' or 'delivery'
+    - Checks ingredient (resource) inventory and deducts usage
     """
     try:
-        # Ensure customer exists (guest or otherwise)
+        #Ensure customer exists
         customer = (
             db.query(customer_model.Customer)
             .filter(customer_model.Customer.id == request.customer_id)
@@ -40,9 +43,14 @@ def create(db: Session, request: schema.OrderCreate):
                 detail="Customer does not exist",
             )
 
-        # Compute total price and validate menu items
+        #Compute total price AND calculate ingredient usage
         total_price = 0.0
+
+        # ingredient_usage[resource_id] = total quantity needed across the whole order
+        ingredient_usage = {}
+
         for item in request.order_items:
+            # Check menu item exists and is available
             menu_item = (
                 db.query(menu_model.MenuItem)
                 .filter(
@@ -56,11 +64,54 @@ def create(db: Session, request: schema.OrderCreate):
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Menu item {item.menu_item_id} not found or unavailable",
                 )
+
+            # Add to total price
             total_price += menu_item.price * item.quantity
 
-        tracking_number = _generate_tracking_number()
+            # Look up recipe rows for this menu item (what ingredients it uses)
+            recipes = (
+                db.query(recipe_model.Recipe)
+                .filter(recipe_model.Recipe.menu_item_id == item.menu_item_id)
+                .all()
+            )
 
-        # Create Order row
+            # If no recipe rows exist, we just treat it as having no tracked ingredients
+            for recipe in recipes:
+                needed = recipe.required_quantity * item.quantity
+                ingredient_usage[recipe.resource_id] = (
+                    ingredient_usage.get(recipe.resource_id, 0.0) + needed
+                )
+
+        #Check inventory for each ingredient and deduct
+        for resource_id, needed in ingredient_usage.items():
+            ingredient = (
+                db.query(resource_model.Resource)
+                .filter(resource_model.Resource.id == resource_id)
+                .with_for_update()
+                .first()
+            )
+
+            if not ingredient:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Ingredient (resource) with id {resource_id} not found",
+                )
+
+            if ingredient.quantity_available < needed:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        f"Not enough '{ingredient.name}' in stock. "
+                        f"Needed {needed} {ingredient.unit}, "
+                        f"available {ingredient.quantity_available} {ingredient.unit}."
+                    ),
+                )
+
+            # Deduct the amount
+            ingredient.quantity_available -= needed
+
+        #Create the order
+        tracking_number = _generate_tracking_number()
         order = order_model.Order(
             tracking_number=tracking_number,
             customer_id=request.customer_id,
@@ -72,7 +123,7 @@ def create(db: Session, request: schema.OrderCreate):
         db.add(order)
         db.flush()  # assign order.id
 
-        # Create OrderDetail rows
+        #Create OrderDetail rows
         for item in request.order_items:
             menu_item = (
                 db.query(menu_model.MenuItem)
@@ -98,7 +149,6 @@ def create(db: Session, request: schema.OrderCreate):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Database error: {error}",
         )
-
 
 def read_all(db: Session):
     """List all orders."""
