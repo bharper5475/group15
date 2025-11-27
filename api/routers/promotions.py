@@ -22,7 +22,7 @@ def read_one_promotion(item_id: int, db: Session = Depends(get_db)):
     return controller.read_one(db, item_id=item_id)
 
 @router.put("/{item_id}", response_model=schema.PromotionRead)
-def update_promoto(item_id: int, request: schema.PromotionCreate, db: Session = Depends(get_db)):
+def update_promotion(item_id: int, request: schema.PromotionCreate, db: Session = Depends(get_db)):
     return controller.update(db=db, request=request, item_id=item_id)
 
 @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
