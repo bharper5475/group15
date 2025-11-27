@@ -20,3 +20,7 @@ def read_all_promotions(db: Session = Depends(get_db)):
 @router.get("/{item_id}", response_model=schema.PromotionRead)
 def read_one_promotion(item_id: int, db: Session = Depends(get_db)):
     return controller.read_one(db, item_id=item_id)
+
+@router.put("/{item_id}", response_model=schema.PromotionRead)
+def update_promoto(item_id: int, request: schema.PromotionCreate, db: Session = Depends(get_db)):
+    return controller.update(db=db, request=request, item_id=item_id)
