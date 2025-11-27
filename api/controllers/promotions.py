@@ -20,3 +20,11 @@ def create(db: Session, request):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
     return new_item
+
+def read_all(db: Session):
+    try:
+        result = db.query(model.Promotion).all()
+    except SQLAlchemyError as e:
+        error = str(e.__dict__['orig'])
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+    return result
