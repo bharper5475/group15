@@ -35,6 +35,7 @@ class OrderCreate(BaseModel):
     customer_id: int
     order_type: str  # "takeout" or "delivery"
     order_items: List[OrderItemCreate]
+    promotion_code: Optional[str] = None
 
     @field_validator("order_type")
     @classmethod

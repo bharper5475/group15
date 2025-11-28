@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 from sqlalchemy.exc import SQLAlchemyError
 import uuid
+from datetime import datetime
 
 from ..models import (
     orders as order_model,
@@ -10,6 +11,7 @@ from ..models import (
     customers as customer_model,
     recipes as recipe_model,
     resources as resource_model,
+    promotions as promo_model
 )
 from ..schemas import orders as schema
 
@@ -81,6 +83,38 @@ def create(db: Session, request: schema.OrderCreate):
                 ingredient_usage[recipe.resource_id] = (
                     ingredient_usage.get(recipe.resource_id, 0.0) + needed
                 )
+        
+        promotion_id = None
+        
+        if request.promotion_code:
+            # checks if promocode exists
+            promotion = (
+                db.query(promo_model.Promotion)
+                .filter(promo_model.Promotion.code == request.promotion_code)
+                .first()
+            )
+            if not promotion:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid promotion code"
+                )
+            
+            if not promotion.is_active:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Promotion code is inactive"
+                )
+
+            if promotion.expiration_date < datetime.now().date():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Promotion code has expired"
+                )
+
+            # apply discount
+            promotion_id = promotion.id
+            discount_amount = total_price * (promotion.discount_percent / 100)
+            total_price -= discount_amount
 
         #Check inventory for each ingredient and deduct
         for resource_id, needed in ingredient_usage.items():
@@ -118,7 +152,8 @@ def create(db: Session, request: schema.OrderCreate):
             order_type=request.order_type.lower(),
             total_price=total_price,
             status=order_model.OrderStatus.RECEIVED,
-            # promotion_id / payment_id can remain NULL for now
+            promotion_id=promotion_id
+            # payment_id can remain NULL for now
         )
         db.add(order)
         db.flush()  # assign order.id
