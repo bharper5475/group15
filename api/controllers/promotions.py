@@ -4,7 +4,7 @@ from ..models import promotions as model
 from sqlalchemy.exc import SQLAlchemyError
 
 def create(db: Session, request):
-    new_item = model.MenuItem(
+    new_item = model.Promotion(
         code=request.code,
         discount_percent=request.discount_percent,
         expiration_date=request.expiration_date,
