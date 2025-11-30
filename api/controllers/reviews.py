@@ -1,68 +1,61 @@
 from sqlalchemy.orm import Session
-from fastapi import HTTPException, status
-from sqlalchemy.exc import SQLAlchemyError
-
-from ..models import reviews as model
-from ..models import menu_items as menu_model
+from fastapi import HTTPException
+from api.models.reviews import Review
+from api.schemas.reviews import ReviewCreate
 
 
-def create(db: Session, request):
-
-    menu_item = (
-        db.query(menu_model.MenuItem)
-        .filter(menu_model.MenuItem.id == request.menu_item_id)
-        .first()
-    )
-    if not menu_item:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Menu item not found",
-        )
-
-    new_review = model.Review(
+def create(db: Session, request: ReviewCreate):
+    review = Review(
         order_id=request.order_id,
         menu_item_id=request.menu_item_id,
         rating=request.rating,
         comment=request.comment,
     )
+    db.add(review)
+    db.commit()
+    db.refresh(review)
+    return review
 
-    try:
-        db.add(new_review)
-        db.commit()
-        db.refresh(new_review)
-    except SQLAlchemyError as e:
-        error = str(e.__dict__.get("orig", e))
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=error
-        )
 
-    return new_review
+def read_all(db: Session):
+    return db.query(Review).all()
+
+
+def read_one(db: Session, review_id: int):
+    review = db.query(Review).filter(Review.id == review_id).first()
+    if not review:
+        raise HTTPException(status_code=404, detail="Review not found")
+    return review
 
 
 def read_by_menu_item(db: Session, menu_item_id: int):
+    return db.query(Review).filter(Review.menu_item_id == menu_item_id).all()
 
 
-    menu_item = (
-        db.query(menu_model.MenuItem)
-        .filter(menu_model.MenuItem.id == menu_item_id)
-        .first()
-    )
-    if not menu_item:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Menu item not found",
-        )
+def read_negative(db: Session):
+    return db.query(Review).filter(Review.rating <= 2).all()
 
-    try:
-        reviews = (
-            db.query(model.Review)
-            .filter(model.Review.menu_item_id == menu_item_id)
-            .all()
-        )
-    except SQLAlchemyError as e:
-        error = str(e.__dict__.get("orig", e))
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=error
-        )
 
-    return reviews
+def update(db: Session, review_id: int, request: ReviewCreate):
+    review = db.query(Review).filter(Review.id == review_id).first()
+    if not review:
+        raise HTTPException(status_code=404, detail="Review not found")
+
+    review.order_id = request.order_id
+    review.menu_item_id = request.menu_item_id
+    review.rating = request.rating
+    review.comment = request.comment
+
+    db.commit()
+    db.refresh(review)
+    return review
+
+
+def delete(db: Session, review_id: int):
+    review = db.query(Review).filter(Review.id == review_id).first()
+    if not review:
+        raise HTTPException(status_code=404, detail="Review not found")
+    db.delete(review)
+    db.commit()
+    return {"message": f"Review {review_id} deleted"}
+
