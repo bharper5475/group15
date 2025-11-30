@@ -1,31 +1,37 @@
-from fastapi import APIRouter, Depends, status, Response
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
-from ..controllers import order_details as controller
-from ..schemas import order_details as schema
-from ..dependencies.database import get_db
+
+from api.dependencies.database import get_db
+from api.schemas.order_details import OrderDetailCreate, OrderDetailRead
+from api.controllers import order_details as controller
 
 router = APIRouter(
     tags=["Order Details"],
-    prefix="/orderdetails"
+    prefix="/order_details"
 )
 
-@router.post("/", response_model=schema.OrderDetailRead, status_code=status.HTTP_201_CREATED)
-def create_order_detail(request: schema.OrderDetailCreate, db: Session = Depends(get_db)):
+
+@router.post("/", response_model=OrderDetailRead, status_code=status.HTTP_201_CREATED)
+def create_order_detail(request: OrderDetailCreate, db: Session = Depends(get_db)):
     return controller.create(db=db, request=request)
 
-@router.get("/", response_model=list[schema.OrderDetailRead])
-def read_all_order_details(db: Session = Depends(get_db)):
+
+@router.get("/", response_model=list[OrderDetailRead])
+def read_all_details(db: Session = Depends(get_db)):
     return controller.read_all(db)
 
-@router.get("/{item_id}", response_model=schema.OrderDetailRead)
-def read_one_order_detail(item_id: int, db: Session = Depends(get_db)):
-    return controller.read_one(db, item_id=item_id)
 
-@router.put("/{item_id}", response_model=schema.OrderDetailRead)
-def update_order_detail(item_id: int, request: schema.OrderDetailCreate, db: Session = Depends(get_db)):
-    return controller.update(db=db, request=request, item_id=item_id)
+@router.get("/{detail_id}", response_model=OrderDetailRead)
+def read_one_detail(detail_id: int, db: Session = Depends(get_db)):
+    return controller.read_one(db=db, detail_id=detail_id)
 
-@router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_order_detail(item_id: int, db: Session = Depends(get_db)):
-    return controller.delete(db=db, item_id=item_id)
+
+@router.put("/{detail_id}", response_model=OrderDetailRead)
+def update_detail(detail_id: int, request: OrderDetailCreate, db: Session = Depends(get_db)):
+    return controller.update(db=db, detail_id=detail_id, request=request)
+
+
+@router.delete("/{detail_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_detail(detail_id: int, db: Session = Depends(get_db)):
+    return controller.delete(db=db, detail_id=detail_id)
 
