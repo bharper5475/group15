@@ -1,16 +1,16 @@
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import List, Optional
 from datetime import datetime
 from enum import Enum
 
 
 class OrderStatus(str, Enum):
-    RECEIVED = "Received"
-    PENDING = "Pending"
-    PREPARING = "Preparing"
-    OUT_FOR_DELIVERY = "Out for Delivery"
-    COMPLETED = "Completed"
-    CANCELLED = "Cancelled"
+    RECEIVED = "RECEIVED"
+    PENDING = "PENDING"
+    PREPARING = "PREPARING"
+    OUT_FOR_DELIVERY = "OUT_FOR_DELIVERY"
+    COMPLETED = "COMPLETED"
+    CANCELLED = "CANCELLED"
 
 
 # What the client sends for each item when creating an order
@@ -21,13 +21,12 @@ class OrderItemCreate(BaseModel):
 
 # What we return for each order detail item
 class OrderDetailInline(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     menu_item_id: int
     quantity: int
     item_price: float
-
-    class Config:
-        from_attributes = True
 
 
 # Request body for POST /orders
@@ -73,6 +72,8 @@ class OrderUpdate(BaseModel):
 
 # Response model for GET/POST/PUT /orders
 class OrderRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     tracking_number: str
     customer_id: int
@@ -83,7 +84,4 @@ class OrderRead(BaseModel):
     payment_id: Optional[int] = None
     created_at: datetime
     order_details: List[OrderDetailInline] = []
-
-    class Config:
-        from_attributes = True
 

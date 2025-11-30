@@ -5,12 +5,12 @@ import enum
 from api.dependencies.database import Base
 
 class OrderStatus(enum.Enum):
-    RECEIVED = "Received"
-    PENDING = "Pending"
-    PREPARING = "Preparing"
-    OUT_FOR_DELIVERY = "Out for Delivery"
-    COMPLETED = "Completed"
-    CANCELLED = "Cancelled"
+    RECEIVED = "RECEIVED"
+    PENDING = "PENDING"
+    PREPARING = "PREPARING"
+    OUT_FOR_DELIVERY = "OUT_FOR_DELIVERY"
+    COMPLETED = "COMPLETED"
+    CANCELLED = "CANCELLED"
 
 class Order(Base):
     __tablename__ = "orders"

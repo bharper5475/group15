@@ -66,6 +66,41 @@ def read_one(db: Session, payment_id: int):
     return payment
 
 
+def read_all(db: Session):
+    return db.query(Payment).all()
+
+
 def read_by_order(db: Session, order_id: int):
-    return db.query(Payment).filter(Payment.id == order_id).all()
+    """Get the payment for a specific order."""
+    from api.models.orders import Order
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if not order.payment_id:
+        raise HTTPException(status_code=404, detail="No payment found for this order")
+    return db.query(Payment).filter(Payment.id == order.payment_id).first()
+
+
+def update(db: Session, payment_id: int, request):
+    payment = db.query(Payment).filter(Payment.id == payment_id).first()
+    if not payment:
+        raise HTTPException(status_code=404, detail="Payment not found")
+
+    update_data = request.dict(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(payment, key, value)
+
+    db.commit()
+    db.refresh(payment)
+    return payment
+
+
+def delete(db: Session, payment_id: int):
+    payment = db.query(Payment).filter(Payment.id == payment_id).first()
+    if not payment:
+        raise HTTPException(status_code=404, detail="Payment not found")
+
+    db.delete(payment)
+    db.commit()
+    return {"message": f"Payment {payment_id} deleted"}
 
