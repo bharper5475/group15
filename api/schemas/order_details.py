@@ -1,4 +1,5 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
+
 
 class OrderDetailBase(BaseModel):
     order_id: int
@@ -6,9 +7,12 @@ class OrderDetailBase(BaseModel):
     quantity: int
     item_price: float
 
+
 class OrderDetailCreate(OrderDetailBase):
     pass
 
+
 class OrderDetailRead(OrderDetailBase):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
-    class Config: from_attributes = True

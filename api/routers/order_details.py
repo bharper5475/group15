@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
-from api.dependencies.database import get_db
-from api.schemas.order_details import OrderDetailCreate, OrderDetailRead
-from api.controllers import order_details as controller
+from ..dependencies.database import get_db
+from ..schemas.order_details import OrderDetailCreate, OrderDetailRead
+from ..controllers import order_details as controller
 
 router = APIRouter(
     tags=["Order Details"],

@@ -26,5 +26,5 @@ def update_promotion(item_id: int, request: schema.PromotionCreate, db: Session 
     return controller.update(db=db, request=request, item_id=item_id)
 
 @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_menu_item(item_id: int, db: Session = Depends(get_db)):
+def delete_promotion(item_id: int, db: Session = Depends(get_db)):
     return controller.delete(db=db, item_id=item_id)

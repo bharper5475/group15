@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
-from api.dependencies.database import get_db
-from api.schemas.customers import CustomerCreate, CustomerRead
-from api.controllers import customers as controller
+from ..dependencies.database import get_db
+from ..schemas.customers import CustomerCreate, CustomerRead
+from ..controllers import customers as controller
 
 router = APIRouter(
     tags=["Customers"],

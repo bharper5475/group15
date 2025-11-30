@@ -26,7 +26,7 @@ def read_one_order(item_id: int, db: Session = Depends(get_db)):
     return controller.read_one(db, item_id=item_id)
 
 @router.put("/{item_id}", response_model=schema.OrderRead)
-def update_order(item_id: int, request: schema.OrderCreate, db: Session = Depends(get_db)):
+def update_order(item_id: int, request: schema.OrderUpdate, db: Session = Depends(get_db)):
     return controller.update(db=db, request=request, item_id=item_id)
 
 @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)

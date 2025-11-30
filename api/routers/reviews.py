@@ -22,9 +22,9 @@ def read_all_reviews(db: Session = Depends(get_db)):
     return controller.read_all(db)
 
 
-@router.get("/{review_id}", response_model=ReviewRead)
-def read_one_review(review_id: int, db: Session = Depends(get_db)):
-    return controller.read_one(db, review_id)
+@router.get("/negative", response_model=List[ReviewRead])
+def read_negative_reviews(db: Session = Depends(get_db)):
+    return controller.read_negative(db)
 
 
 @router.get("/menu/{menu_item_id}", response_model=List[ReviewRead])
@@ -32,9 +32,9 @@ def read_reviews_for_item(menu_item_id: int, db: Session = Depends(get_db)):
     return controller.read_by_menu_item(db, menu_item_id)
 
 
-@router.get("/negative", response_model=List[ReviewRead])
-def read_negative_reviews(db: Session = Depends(get_db)):
-    return controller.read_negative(db)
+@router.get("/{review_id}", response_model=ReviewRead)
+def read_one_review(review_id: int, db: Session = Depends(get_db)):
+    return controller.read_one(db, review_id)
 
 
 @router.put("/{review_id}", response_model=ReviewRead)
