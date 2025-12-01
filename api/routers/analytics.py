@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from api.dependencies.database import get_db
-from api.controllers.analytics import revenue_for_date
+from ..dependencies.database import get_db
+from ..controllers.analytics import revenue_for_date
 
 router = APIRouter(
     tags=["Analytics"],
