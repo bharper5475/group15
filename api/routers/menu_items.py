@@ -28,3 +28,7 @@ def update_menu_item(item_id: int, request: schema.MenuItemCreate, db: Session =
 @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_menu_item(item_id: int, db: Session = Depends(get_db)):
     return controller.delete(db=db, item_id=item_id)
+
+@router.get("/search", response_model=list[schema.MenuItemRead])
+def search_menu_items(category: str | None = None, db: Session = Depends(get_db)):
+    return controller.search(db=db, category=category)

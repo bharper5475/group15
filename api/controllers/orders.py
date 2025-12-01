@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import func
 import uuid
 from datetime import datetime
 
@@ -24,35 +25,54 @@ def _generate_tracking_number() -> str:
 def create(db: Session, request: schema.OrderCreate):
     """
     Create an order with one or more items.
-
-    - Validates customer exists
-    - Validates all menu items exist and are available
-    - Automatically computes total_price
-    - Auto-generates tracking_number
-    - Supports order_type: 'takeout' or 'delivery'
-    - Checks ingredient (resource) inventory and deducts usage
+    Supports:
+    - Registered customer orders
+    - Guest checkout (auto-create customer)
+    - Promotions
+    - Inventory deduction
     """
+
     try:
-        #Ensure customer exists
-        customer = (
-            db.query(customer_model.Customer)
-            .filter(customer_model.Customer.id == request.customer_id)
-            .first()
-        )
-        if not customer:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Customer does not exist",
+
+        # CUSTOMER OR GUEST CHECKOUT
+        if request.customer_id is None:
+            # Guest checkout must include guest fields (already validated by schema, but double-check)
+            if not (request.guest_name and request.guest_phone and request.guest_address):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Guest checkout requires name, phone, and address"
+                )
+
+            # Create a temporary guest customer
+            guest = customer_model.Customer(
+                name=request.guest_name,
+                email=None,
+                phone=request.guest_phone,
+                address=request.guest_address,
             )
+            db.add(guest)
+            db.commit()
+            db.refresh(guest)
 
-        #Compute total price AND calculate ingredient usage
+            customer = guest
+        else:
+            # Registered customer
+            customer = (
+                db.query(customer_model.Customer)
+                .filter(customer_model.Customer.id == request.customer_id)
+                .first()
+            )
+            if not customer:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Customer does not exist",
+                )
+
+        # Compute total price + ingredient usage
         total_price = 0.0
-
-        # ingredient_usage[resource_id] = total quantity needed across the whole order
-        ingredient_usage = {}
+        ingredient_usage = {}  # resource_id → amount needed
 
         for item in request.order_items:
-            # Check menu item exists and is available
             menu_item = (
                 db.query(menu_model.MenuItem)
                 .filter(
@@ -67,56 +87,47 @@ def create(db: Session, request: schema.OrderCreate):
                     detail=f"Menu item {item.menu_item_id} not found or unavailable",
                 )
 
-            # Add to total price
+            # order total
             total_price += menu_item.price * item.quantity
 
-            # Look up recipe rows for this menu item (what ingredients it uses)
+            # recipe → ingredient usage
             recipes = (
                 db.query(recipe_model.Recipe)
                 .filter(recipe_model.Recipe.menu_item_id == item.menu_item_id)
                 .all()
             )
 
-            # If no recipe rows exist, we just treat it as having no tracked ingredients
             for recipe in recipes:
                 needed = recipe.required_quantity * item.quantity
                 ingredient_usage[recipe.resource_id] = (
                     ingredient_usage.get(recipe.resource_id, 0.0) + needed
                 )
-        
+
+        # 3. Promo
         promotion_id = None
-        
+
         if request.promotion_code:
-            # checks if promocode exists
-            promotion = (
+            promo = (
                 db.query(promo_model.Promotion)
                 .filter(promo_model.Promotion.code == request.promotion_code)
                 .first()
             )
-            if not promotion:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid promotion code"
-                )
-            
-            if not promotion.is_active:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Promotion code is inactive"
-                )
 
-            if promotion.expiration_date < datetime.now().date():
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Promotion code has expired"
-                )
+            if not promo:
+                raise HTTPException(status_code=400, detail="Invalid promotion code")
 
-            # apply discount
-            promotion_id = promotion.id
-            discount_amount = total_price * (promotion.discount_percent / 100)
-            total_price -= discount_amount
+            if not promo.is_active:
+                raise HTTPException(status_code=400, detail="Promotion code is inactive")
 
-        #Check inventory for each ingredient and deduct
+            if promo.expiration_date < datetime.now().date():
+                raise HTTPException(status_code=400, detail="Promotion code has expired")
+
+            promotion_id = promo.id
+            discount = total_price * (promo.discount_percent / 100)
+            total_price -= discount
+
+
+        # Check inventory + deduct
         for resource_id, needed in ingredient_usage.items():
             ingredient = (
                 db.query(resource_model.Resource)
@@ -127,13 +138,13 @@ def create(db: Session, request: schema.OrderCreate):
 
             if not ingredient:
                 raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Ingredient (resource) with id {resource_id} not found",
+                    status_code=400,
+                    detail=f"Ingredient resource {resource_id} not found"
                 )
 
             if ingredient.quantity_available < needed:
                 raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
+                    status_code=400,
                     detail=(
                         f"Not enough '{ingredient.name}' in stock. "
                         f"Needed {needed} {ingredient.unit}, "
@@ -141,30 +152,33 @@ def create(db: Session, request: schema.OrderCreate):
                     ),
                 )
 
-            # Deduct the amount
             ingredient.quantity_available -= needed
 
-        #Create the order
+
+        #Create Order
         tracking_number = _generate_tracking_number()
         order = order_model.Order(
             tracking_number=tracking_number,
-            customer_id=request.customer_id,
+            customer_id=customer.id,  # Works for registered & guest
             order_type=request.order_type.lower(),
             total_price=total_price,
             status=order_model.OrderStatus.RECEIVED,
-            promotion_id=promotion_id
-            # payment_id can remain NULL for now
+            promotion_id=promotion_id,
         )
-        db.add(order)
-        db.flush()  # assign order.id
 
-        #Create OrderDetail rows
+        db.add(order)
+        db.flush()  # assign order.id before adding details
+
+        # ------------------------------------------------------------
+        # 6. Create OrderDetail rows
+        # ------------------------------------------------------------
         for item in request.order_items:
             menu_item = (
                 db.query(menu_model.MenuItem)
                 .filter(menu_model.MenuItem.id == item.menu_item_id)
                 .first()
             )
+
             od = od_model.OrderDetail(
                 order_id=order.id,
                 menu_item_id=item.menu_item_id,
@@ -180,46 +194,32 @@ def create(db: Session, request: schema.OrderCreate):
     except SQLAlchemyError as e:
         db.rollback()
         error = str(e.__dict__.get("orig", e))
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Database error: {error}",
-        )
+        raise HTTPException(status_code=400, detail=f"Database error: {error}")
 
+
+# READ FUNCTIONS
 def read_all(db: Session):
-    """List all orders."""
     try:
         return db.query(order_model.Order).all()
     except SQLAlchemyError as e:
-        error = str(e.__dict__.get("orig", e))
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Database error: {error}",
-        )
+        raise HTTPException(status_code=400, detail=str(e.__dict__.get("orig", e)))
 
 
 def read_one(db: Session, item_id: int):
-    """Get a single order by ID."""
     try:
-        item = (
+        order = (
             db.query(order_model.Order)
             .filter(order_model.Order.id == item_id)
             .first()
         )
-        if not item:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Order not found",
-            )
-        return item
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+        return order
     except SQLAlchemyError as e:
-        error = str(e.__dict__.get("orig", e))
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Database error: {error}",
-        )
+        raise HTTPException(status_code=400, detail=str(e.__dict__.get("orig", e)))
+
 
 def read_by_tracking_number(db: Session, tracking_number: str):
-    """Get a single order by tracking number."""
     try:
         order = (
             db.query(order_model.Order)
@@ -227,27 +227,14 @@ def read_by_tracking_number(db: Session, tracking_number: str):
             .first()
         )
         if not order:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Order not found",
-            )
+            raise HTTPException(status_code=404, detail="Order not found")
         return order
-
     except SQLAlchemyError as e:
-        error = str(e.__dict__.get("orig", e))
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Database error: {error}",
-        )
+        raise HTTPException(status_code=400, detail=str(e.__dict__.get("orig", e)))
 
+
+# UPDATE ORDER
 def update(db: Session, item_id: int, request: schema.OrderUpdate):
-    """
-    Update an existing order.
-
-    We allow updating:
-    - order_type ('takeout' / 'delivery')
-    - status (enum)
-    """
     try:
         order = (
             db.query(order_model.Order)
@@ -255,14 +242,13 @@ def update(db: Session, item_id: int, request: schema.OrderUpdate):
             .first()
         )
         if not order:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Order not found",
-            )
+            raise HTTPException(status_code=404, detail="Order not found")
 
         data = request.dict(exclude_unset=True)
+
         if "order_type" in data and data["order_type"] is not None:
             order.order_type = data["order_type"].lower()
+
         if "status" in data and data["status"] is not None:
             order.status = data["status"]
 
@@ -272,20 +258,11 @@ def update(db: Session, item_id: int, request: schema.OrderUpdate):
 
     except SQLAlchemyError as e:
         db.rollback()
-        error = str(e.__dict__.get("orig", e))
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Database error: {error}",
-        )
+        raise HTTPException(status_code=400, detail=str(e.__dict__.get("orig", e)))
 
 
+# DELETE ORDER
 def delete(db: Session, item_id: int):
-    """
-    Delete an order.
-
-    OrderDetails will be deleted as well because of the relationship
-    cascade defined on Order.order_details.
-    """
     try:
         order = (
             db.query(order_model.Order)
@@ -293,21 +270,26 @@ def delete(db: Session, item_id: int):
             .first()
         )
         if not order:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Order not found",
-            )
+            raise HTTPException(status_code=404, detail="Order not found")
 
         db.delete(order)
         db.commit()
-        # Router returns 204, so we don't need to return a body
         return
 
     except SQLAlchemyError as e:
         db.rollback()
-        error = str(e.__dict__.get("orig", e))
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Database error: {error}",
-        )
+        raise HTTPException(status_code=400, detail=str(e.__dict__.get("orig", e)))
 
+
+# READ BY DATE RANGE
+def read_by_date_range(db: Session, start: str, end: str):
+    try:
+        orders = (
+            db.query(order_model.Order)
+            .filter(func.date(order_model.Order.created_at) >= start)
+            .filter(func.date(order_model.Order.created_at) <= end)
+            .all()
+        )
+        return orders
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid date range")

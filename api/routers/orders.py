@@ -33,3 +33,6 @@ def update_order(item_id: int, request: schema.OrderUpdate, db: Session = Depend
 def delete_order(item_id: int, db: Session = Depends(get_db)):
     return controller.delete(db=db, item_id=item_id)
 
+@router.get("/range", response_model=list[schema.OrderRead])
+def get_orders_by_range(start: str, end: str, db: Session = Depends(get_db)):
+    return controller.read_by_date_range(db, start, end)

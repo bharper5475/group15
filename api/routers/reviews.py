@@ -46,3 +46,7 @@ def update_review(review_id: int, request: ReviewCreate, db: Session = Depends(g
 def delete_review(review_id: int, db: Session = Depends(get_db)):
     return controller.delete(db, review_id)
 
+@router.get("/popularity")
+def review_popularity_stats(db: Session = Depends(get_db)):
+    return controller.popularity_stats(db)
+
