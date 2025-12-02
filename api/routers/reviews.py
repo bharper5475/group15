@@ -32,6 +32,11 @@ def read_reviews_for_item(menu_item_id: int, db: Session = Depends(get_db)):
     return controller.read_by_menu_item(db, menu_item_id)
 
 
+@router.get("/popularity")
+def review_popularity_stats(db: Session = Depends(get_db)):
+    return controller.popularity_stats(db)
+
+
 @router.get("/{review_id}", response_model=ReviewRead)
 def read_one_review(review_id: int, db: Session = Depends(get_db)):
     return controller.read_one(db, review_id)
@@ -45,8 +50,4 @@ def update_review(review_id: int, request: ReviewCreate, db: Session = Depends(g
 @router.delete("/{review_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_review(review_id: int, db: Session = Depends(get_db)):
     return controller.delete(db, review_id)
-
-@router.get("/popularity")
-def review_popularity_stats(db: Session = Depends(get_db)):
-    return controller.popularity_stats(db)
 

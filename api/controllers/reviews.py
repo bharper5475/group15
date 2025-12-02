@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, case
 from fastapi import HTTPException
 from api.models.reviews import Review
 from api.models.menu_items import MenuItem
@@ -73,7 +73,7 @@ def popularity_stats(db: Session):
             MenuItem.name.label("item_name"),
             func.avg(Review.rating).label("avg_rating"),
             func.count(Review.id).label("review_count"),
-            func.sum(func.case((Review.rating <= 2, 1), else_=0)).label("negative_count")
+            func.sum(case((Review.rating <= 2, 1), else_=0)).label("negative_count")
         )
         .join(MenuItem, MenuItem.id == Review.menu_item_id)
         .group_by(Review.menu_item_id, MenuItem.name)

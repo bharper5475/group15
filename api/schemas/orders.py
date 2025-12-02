@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, field_validator, ConfigDict
+from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 from typing import List, Optional
 from datetime import datetime
 from enum import Enum
@@ -62,21 +62,15 @@ class OrderCreate(BaseModel):
         return v
 
     # Validate identity requirement for guest checkout
-    @field_validator("guest_address", mode="after")
-    @classmethod
-    def validate_guest_or_customer(cls, _, values):
-        customer_id = values.get("customer_id")
-        guest_name = values.get("guest_name")
-        guest_phone = values.get("guest_phone")
-        guest_address = values.get("guest_address")
-
+    @model_validator(mode="after")
+    def validate_guest_or_customer(self):
         # Case 1: Registered customer placing order → OK
-        if customer_id is not None:
-            return _
+        if self.customer_id is not None:
+            return self
 
         # Case 2: Guest checkout → require name, phone, address
-        if guest_name and guest_phone and guest_address:
-            return _
+        if self.guest_name and self.guest_phone and self.guest_address:
+            return self
 
         raise ValueError(
             "Either customer_id OR guest_name, guest_phone, and guest_address must be provided"
